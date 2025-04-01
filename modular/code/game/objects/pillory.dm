@@ -18,13 +18,6 @@
 	var/base_icon = "pillory_single"
 	var/list/accepted_id = list()
 	var/keylock = TRUE
-	var/bounty_redemption_time = 5 MINUTES
-	var/bounty_step_reward = 50
-	var/bounty_timer
-	var/violation_bonus = 25
-	var/max_violation_bonus = 100
-	var/mob/living/carbon/human/bounty_hunter
-	var/datum/bounty/active_bounty
 
 /obj/structure/pillory/double/custom
 	keylock = FALSE
@@ -218,8 +211,6 @@
 
 	var/mob/living/carbon/human/H = M
 
-	check_bounty(M)
-
 	if (H.dna)
 		if (H.dna.species)
 			var/datum/species/S = H.dna.species
@@ -243,7 +234,62 @@
 	..()
 
 
-/obj/structure/pillory/proc/check_bounty(mob/living/carbon/human/victim)
+
+/obj/structure/pillory/post_unbuckle_mob(mob/living/M)
+	//M.regenerate_icons()
+	M.reset_offsets("bed_buckle")
+	..()
+
+/obj/structure/pillory/unbuckle_mob(mob/living/user)
+	if(latched)
+		if(user.STASTR >= 18)
+			if(do_after(user, 25))
+				user.visible_message(span_warning("[user] breaks [src] open!"))
+				locked = FALSE
+				latched = FALSE
+				..()
+		else
+			to_chat(usr, span_warning("Unlock it first!"))
+			return FALSE
+	else
+		..()
+
+	..()
+
+#undef PILLORY_HEAD_OFFSET
+
+
+/obj/structure/pillory/bounty
+	name = "Excidium Pillory"
+	desc = "Make the criminals pay for their crimes!"
+	icon_state = "pillory_device"
+	var/mob/living/carbon/human/bounty_hunter
+	var/datum/bounty/active_bounty
+	var/bounty_redemption_time = 5 MINUTES
+	var/bounty_step_reward = 50
+	var/bounty_timer
+	var/violation_bonus = 25
+	var/max_violation_bonus = 100
+
+
+/obj/structure/pillory/bounty/post_buckle_mob(mob/living/M)
+	if (!istype(M, /mob/living/carbon/human))
+		return
+
+	check_bounty(M)
+	..()
+
+/obj/structure/pillory/bounty/post_unbuckle_mob(mob/living/M)
+	icon_state = "[base_icon]"
+	active_bounty = null
+	bounty_hunter = null
+	if(bounty_timer)
+		deltimer(bounty_timer)
+		bounty_timer = null
+	UnregisterSignal(M, COMSIG_HUMAN_LEWD_FINISHED_ON)
+	..()
+
+/obj/structure/pillory/bounty/proc/check_bounty(mob/living/carbon/human/victim)
 	var/datum/bounty/found_bounty
 	var/mob/living/carbon/human/hunter = usr
 	if(!istype(hunter) || hunter == victim) return
@@ -269,19 +315,19 @@
 	bounty_timer(victim, found_bounty)
 	RegisterSignal(victim, COMSIG_HUMAN_LEWD_FINISHED_ON, PROC_REF(add_violation_bonus))
 
-/obj/structure/pillory/proc/add_violation_bonus(mob/living/carbon/human/victim)
+/obj/structure/pillory/bounty/proc/add_violation_bonus(mob/living/carbon/human/victim)
 	max_violation_bonus -= max(violation_bonus, 0)
 	if(max_violation_bonus <= 0)
 		return
 	pay_bounty(violation_bonus, victim, active_bounty, TRUE)
 
-/obj/structure/pillory/proc/bounty_timer(mob/living/carbon/human/victim, datum/bounty/redeem_bounty)
+/obj/structure/pillory/bounty/proc/bounty_timer(mob/living/carbon/human/victim, datum/bounty/redeem_bounty)
 	bounty_timer = addtimer(CALLBACK(src, PROC_REF(bounty_redeem), victim), bounty_redemption_time, TIMER_STOPPABLE)
 
-/obj/structure/pillory/proc/bounty_redeem(mob/living/carbon/human/victim)
+/obj/structure/pillory/bounty/proc/bounty_redeem(mob/living/carbon/human/victim)
 	pay_bounty(bounty_step_reward, victim, active_bounty)
 
-/obj/structure/pillory/proc/pay_bounty(amount = 0, mob/living/carbon/human/victim, datum/bounty/redeem_bounty, violation = FALSE)
+/obj/structure/pillory/bounty/proc/pay_bounty(amount = 0, mob/living/carbon/human/victim, datum/bounty/redeem_bounty, violation = FALSE)
 	if(amount <= 0 || !redeem_bounty) return 0
 	var/reward_amount = min(redeem_bounty.amount, amount)
 
@@ -304,34 +350,3 @@
 		bounty_timer(bounty_hunter, victim, redeem_bounty)
 
 	return reward_amount
-
-/obj/structure/pillory/post_unbuckle_mob(mob/living/M)
-	//M.regenerate_icons()
-	M.reset_offsets("bed_buckle")
-	icon_state = "[base_icon]"
-	update_icon()
-	active_bounty = null
-	bounty_hunter = null
-	if(bounty_timer)
-		deltimer(bounty_timer)
-		bounty_timer = null
-	UnregisterSignal(M, COMSIG_HUMAN_LEWD_FINISHED_ON)
-	..()
-
-/obj/structure/pillory/unbuckle_mob(mob/living/user)
-	if(latched)
-		if(user.STASTR >= 18)
-			if(do_after(user, 25))
-				user.visible_message(span_warning("[user] breaks [src] open!"))
-				locked = FALSE
-				latched = FALSE
-				..()
-		else
-			to_chat(usr, span_warning("Unlock it first!"))
-			return FALSE
-	else
-		..()
-
-	..()
-
-#undef PILLORY_HEAD_OFFSET
